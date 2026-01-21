@@ -10,6 +10,17 @@ const CustomerDashboard = () => {
   const [redeemAmount, setRedeemAmount] = useState("");
   const [message, setMessage] = useState("");
 
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const id = setInterval(() => {
+      fetchDashboard(auth.currentUser.uid);
+    }, 10000);
+
+    return () => clearInterval(id);
+  }, []);
+
   // 🔔 Track previous points for notifications
   const prevPointsRef = useRef(null);
 
@@ -89,7 +100,7 @@ const CustomerDashboard = () => {
     });
 
     return () => unsubscribe();
-  }, [name]);
+  });
 
   /* ---------------- REDEEM ---------------- */
   const redeemPoints = async (e) => {
@@ -220,11 +231,10 @@ const CustomerDashboard = () => {
                     >
                       <td className="py-2">₹{t.amount}</td>
                       <td
-                        className={`py-2 ${
-                          t.pointsEarned >= 0
+                        className={`py-2 ${t.pointsEarned >= 0
                             ? "text-green-600"
                             : "text-red-500"
-                        }`}
+                          }`}
                       >
                         {t.pointsEarned > 0 && "+"}
                         {t.pointsEarned.toFixed(2)}
