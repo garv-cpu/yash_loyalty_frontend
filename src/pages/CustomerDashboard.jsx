@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 
@@ -10,6 +10,58 @@ const CustomerDashboard = () => {
   const [redeemAmount, setRedeemAmount] = useState("");
   const [message, setMessage] = useState("");
 
+  // 🔔 Track previous points for notifications
+  const prevPointsRef = useRef(null);
+
+  /* ---------------- NOTIFICATION HELPERS ---------------- */
+  const requestNotificationPermission = async () => {
+    if ("Notification" in window && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  };
+
+  const showNotification = (title, body) => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  };
+
+  /* ---------------- FETCH DASHBOARD ---------------- */
+  const fetchDashboard = async (uid, isFirstLoad = false) => {
+    const res = await fetch(
+      `https://yash-loyalty-backend.onrender.com/api/dashboard/${uid}`
+    );
+    const data = await res.json();
+
+    // 🔔 Notify on points change
+    if (prevPointsRef.current !== null) {
+      const diff = data.loyaltyPoints - prevPointsRef.current;
+
+      if (diff !== 0) {
+        const sign = diff > 0 ? "+" : "";
+        showNotification(
+          diff > 0 ? "🎉 Points Added" : "💸 Points Redeemed",
+          `${sign}${diff.toFixed(2)} pts • Total: ${data.loyaltyPoints.toFixed(
+            2
+          )}`
+        );
+      }
+    }
+
+    // 🔔 First login notification
+    if (isFirstLoad) {
+      showNotification(
+        `Hi ${name || "there"} 👋`,
+        `You have ${data.loyaltyPoints.toFixed(2)} loyalty points`
+      );
+    }
+
+    prevPointsRef.current = data.loyaltyPoints;
+    setPoints(data.loyaltyPoints);
+    setTransactions(data.transactions);
+  };
+
+  /* ---------------- AUTH LISTENER ---------------- */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (!user) {
@@ -17,22 +69,18 @@ const CustomerDashboard = () => {
         return;
       }
 
+      await requestNotificationPermission();
+
       try {
-        // Fetch dashboard data
-        const res = await fetch(
-          `http://localhost:5000/api/dashboard/${user.uid}`
-        );
-        const data = await res.json();
-
-        setPoints(data.loyaltyPoints);
-        setTransactions(data.transactions);
-
         // Fetch customer profile (name)
         const userRes = await fetch(
-          `http://localhost:5000/api/users/${user.uid}`
+          `https://yash-loyalty-backend.onrender.com/api/users/${user.uid}`
         );
         const userData = await userRes.json();
         setName(userData.name);
+
+        // Fetch dashboard data
+        await fetchDashboard(user.uid, true);
       } catch (err) {
         console.error(err);
       } finally {
@@ -41,14 +89,15 @@ const CustomerDashboard = () => {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [name]);
 
+  /* ---------------- REDEEM ---------------- */
   const redeemPoints = async (e) => {
     e.preventDefault();
     setMessage("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/redeem", {
+      const res = await fetch("https://yash-loyalty-backend.onrender.com/api/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -64,15 +113,8 @@ const CustomerDashboard = () => {
         return;
       }
 
-      setPoints(data.remainingPoints);
       setMessage(`Redeemed ₹${data.redeemValue.toFixed(2)} successfully`);
-
-      const dashRes = await fetch(
-        `http://localhost:5000/api/dashboard/${auth.currentUser.uid}`
-      );
-      const dashData = await dashRes.json();
-      setTransactions(dashData.transactions);
-
+      await fetchDashboard(auth.currentUser.uid);
       setRedeemAmount("");
     } catch (err) {
       setMessage("Server error");

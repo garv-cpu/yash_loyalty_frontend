@@ -25,7 +25,7 @@ const Login = () => {
 
       // 2️⃣ Fetch user role from backend (MongoDB)
       const res = await fetch(
-        `http://localhost:5000/api/users/${user.uid}`
+        `https://yash-loyalty-backend.onrender.com/api/users/${user.uid}`
       );
 
       if (!res.ok) {
