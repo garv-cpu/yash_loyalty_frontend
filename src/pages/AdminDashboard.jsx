@@ -29,6 +29,10 @@ const AdminDashboard = () => {
   const [customerEmail, setCustomerEmail] = useState("");
   const [saleAmount, setSaleAmount] = useState("");
 
+  /* ================== ADDED: REFUND STATE ================== */
+  const [refundEmail, setRefundEmail] = useState("");
+  const [refundAmount, setRefundAmount] = useState("");
+
   /* ---------------- CREATE CUSTOMER ---------------- */
   const createCustomer = async (e) => {
     e.preventDefault();
@@ -37,31 +41,13 @@ const AdminDashboard = () => {
     logSection("CREATE CUSTOMER START");
 
     try {
-      console.log("Input values:", {
-        name,
-        email,
-        passwordLength: password.length,
-      });
-
       if (password.length < 6) {
-        console.warn("Password too short");
         setMessage("Password must be at least 6 characters");
         return;
       }
 
-      /* -------- FIREBASE STEP -------- */
-      logSection("FIREBASE: createUserWithEmailAndPassword");
-
       const userCredential =
         await createUserWithEmailAndPassword(auth, email, password);
-
-      console.log("Firebase user created:", {
-        uid: userCredential.user.uid,
-        email: userCredential.user.email,
-      });
-
-      /* -------- BACKEND STEP -------- */
-      logSection("BACKEND: POST /api/users");
 
       const payload = {
         firebaseUid: userCredential.user.uid,
@@ -71,48 +57,27 @@ const AdminDashboard = () => {
         loyaltyPoints: 0,
       };
 
-      console.log("Request payload:", payload);
-
-      const res = await fetch("https://yash-loyalty-backend.onrender.com/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      console.log("Response status:", res.status, res.statusText);
+      const res = await fetch(
+        "https://yash-loyalty-backend.onrender.com/api/users",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const data = await res.json();
-      console.log("Response body:", data);
-
-      if (!res.ok) {
-        logError("BACKEND ERROR", data);
-        throw new Error(
-          data.message || "Backend rejected customer creation"
-        );
-      }
-
-      console.log("Customer successfully saved in DB");
+      if (!res.ok) throw new Error(data.message);
 
       setMessage("Customer created successfully ✅");
       setEmail("");
       setPassword("");
       setName("");
-
     } catch (err) {
       logError("CREATE CUSTOMER FAILED", err);
-
-      /* Detect Firebase errors specifically */
-      if (err.code) {
-        console.error("Firebase error code:", err.code);
-        console.error("Firebase error message:", err.message);
-      }
-
       setMessage(err.message || "Error creating customer");
-    } finally {
-      logSection("CREATE CUSTOMER END");
     }
   };
-
 
   /* ---------------- ADD SALE (EMAIL BASED) ---------------- */
   const addSale = async (e) => {
@@ -120,24 +85,26 @@ const AdminDashboard = () => {
     setMessage("");
 
     try {
-      const res = await fetch("https://yash-loyalty-backend.onrender.com/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: customerEmail,
-          amount: Number(saleAmount),
-        }),
-      });
+      const res = await fetch(
+        "https://yash-loyalty-backend.onrender.com/api/sales",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: customerEmail,
+            amount: Number(saleAmount),
+          }),
+        }
+      );
 
       const data = await res.json();
-
       if (!res.ok) {
         setMessage(data.message || "Error adding sale");
         return;
       }
 
       setMessage(
-        `Sale added for ${data.customer} (${data.email}) — ₹${data.amount} → +${data.pointsEarned.toFixed(
+        `Sale added for ${data.customer} — ₹${data.amount} → +${data.pointsEarned.toFixed(
           2
         )} pts`
       );
@@ -145,8 +112,44 @@ const AdminDashboard = () => {
       setCustomerEmail("");
       setSaleAmount("");
     } catch (err) {
-      console.error(err);
       setMessage("Server error");
+    }
+  };
+
+  /* ================== ADDED: REFUND HANDLER ================== */
+  const refundSale = async (e) => {
+    e.preventDefault();
+    setMessage("");
+
+    try {
+      const res = await fetch(
+        "https://yash-loyalty-backend.onrender.com/api/refund",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: refundEmail,
+            amount: Number(refundAmount),
+          }),
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.message || "Refund failed");
+        return;
+      }
+
+      setMessage(
+        `Refund processed — ₹${refundAmount} | -${data.pointsRemoved.toFixed(
+          2
+        )} pts`
+      );
+
+      setRefundEmail("");
+      setRefundAmount("");
+    } catch (err) {
+      setMessage("Server error during refund");
     }
   };
 
@@ -221,7 +224,7 @@ const AdminDashboard = () => {
         {/* ADD SALE */}
         <div className="bg-white rounded-xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4">
-            Add Sale (by Email)
+            Add Sale
           </h2>
 
           <form
@@ -249,6 +252,42 @@ const AdminDashboard = () => {
             <div className="md:col-span-2">
               <button className="w-full bg-green-600 text-white py-2 rounded">
                 Add Sale
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* ================== ADDED: REFUND SALE ================== */}
+        <div className="bg-white rounded-xl shadow p-6">
+          <h2 className="text-lg font-semibold mb-4 text-red-600">
+            Refund Sale
+          </h2>
+
+          <form
+            onSubmit={refundSale}
+            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          >
+            <input
+              type="email"
+              placeholder="Customer Email"
+              className="border rounded px-3 py-2"
+              value={refundEmail}
+              onChange={(e) => setRefundEmail(e.target.value)}
+              required
+            />
+
+            <input
+              type="number"
+              placeholder="Refund Amount (₹)"
+              className="border rounded px-3 py-2"
+              value={refundAmount}
+              onChange={(e) => setRefundAmount(e.target.value)}
+              required
+            />
+
+            <div className="md:col-span-2">
+              <button className="w-full bg-red-600 text-white py-2 rounded">
+                Process Refund
               </button>
             </div>
           </form>

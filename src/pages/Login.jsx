@@ -55,7 +55,7 @@ const Login = () => {
         className="bg-white p-6 rounded shadow w-80"
       >
         <h2 className="text-2xl font-bold mb-4 text-center">
-          Login
+          Login at Yash
         </h2>
 
         {error && (
